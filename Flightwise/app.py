@@ -12,11 +12,11 @@ def get_data():
     return load_data()
 
 def bar(series, title, horizontal=False):
-    fig, ax = plt.subplots(figsize=(6, 3.5))
+    fig, ax = plt.subplots(figsize=(4.5, 2.4))
     series.plot(kind="barh" if horizontal else "bar", ax=ax, color="#2E86DE")
     ax.set_title(title)
     plt.tight_layout()
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=False)
 
 df = get_data()
 cities = sorted(df["source_city"].unique())
@@ -41,7 +41,7 @@ st.sidebar.info(f"Days until departure: {days_left}")
 sub = df[df["class"] == cls]
 route_df = sub[(sub["source_city"] == src) & (sub["destination_city"] == dst)]
 
-t1, t2, t3, t4 = st.tabs(["🎯 Advisor", "✈️ Flights & Budget", "📉 Savings", "📊 Insights"])
+t1, t2, t3, t4, t5 = st.tabs(["🎯 Advisor", "✈️ Flights & Budget", "📉 Savings", "📊 Insights", "💡 Key Findings"])
 
 with t1:
     res = ad.advise(df, src, dst, cls)
@@ -63,6 +63,7 @@ with t1:
         bar(ad.stops_vs_price(df, src, dst, cls), "Avg price by stops")
         st.subheader("Price trend for this route")
         st.line_chart(route_df.groupby("days_left")["price"].mean())
+
 with t2:
     st.write(f"{src} → {dst} | {travel_date.strftime('%d %b %Y')}")
     day_df = route_df[route_df["days_left"] == days_left]
@@ -86,6 +87,7 @@ with t2:
         else:
             st.dataframe(r, use_container_width=True)
             st.download_button("Download results (CSV)", r.to_csv().encode(), "flights.csv", "text/csv")
+
 with t3:
     s = ad.savings(df, src, dst, days_left, cls)
     if s is None:
@@ -105,3 +107,33 @@ with t4:
     with c2:
         bar(an.booking_window(sub), "Price vs days before flight")
         bar(ad.cheapest_destinations(df, src, cls), f"Cheapest destinations from {src}")
+
+with t5:
+    eco = df[df["class"] == "Economy"]
+    bus = df[df["class"] == "Business"]
+    st.subheader("Key findings from 297,940 fares")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric(f"Economy avg ({len(eco)/len(df)*100:.0f}% of flights)", f"₹{eco['price'].mean():,.0f}")
+    c2.metric(f"Business avg ({len(bus)/len(df)*100:.0f}% of flights)", f"₹{bus['price'].mean():,.0f}")
+    c3.metric("Business vs Economy", f"{bus['price'].mean()/eco['price'].mean():.1f}x")
+    c4.metric("Days left vs price (corr)", f"{eco['days_left'].corr(eco['price']):.2f}")
+
+    st.markdown("**1. Class is the main price driver.** Always compare Economy and Business separately.")
+    early = eco[eco["days_left"] >= 21]["price"].mean()
+    late = eco[eco["days_left"] <= 2]["price"].mean()
+    st.markdown(f"**2. Book early.** Economy costs about ₹{late:,.0f} when booked 1-2 days ahead versus about ₹{early:,.0f} when booked 21+ days ahead ({late/early:.1f}x).")
+    p15 = eco[eco["days_left"] == 15]["price"].mean()
+    p20 = eco[eco["days_left"] == 20]["price"].mean()
+    st.markdown(f"**3. Practical deadline.** Fares drop from about ₹{p15:,.0f} at 15 days left to about ₹{p20:,.0f} at 20 days left.")
+
+    st.markdown("**4. Stops raise the fare (Economy).**")
+    stops = eco.groupby("stops")["price"].mean().round(0)
+    stops.index = ["Non-stop", "1 stop", "2+ stops"]
+    bar(stops, "Economy avg fare by stops")
+
+    st.markdown("**5. Airlines (Economy, cheapest to costliest).**")
+    bar(an.airline_avg(eco), "Economy avg fare by airline", horizontal=True)
+
+    d = df["duration"].corr(df["price"])
+    st.markdown(f"**6. Duration has a weak effect.** Correlation with price is {d:.2f}; stops and booking time matter far more.")
