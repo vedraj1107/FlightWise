@@ -12,12 +12,34 @@ def get_data():
     return load_data()
 
 def bar(series, title, horizontal=False):
-    fig, ax = plt.subplots(figsize=(4.5, 2.4))
-    series.plot(kind="barh" if horizontal else "bar", ax=ax, color="#2E86DE")
-    ax.set_title(title)
+    vals = series.values
+    cols = ["#8DB9F5"] * len(vals)
+    cols[int(vals.argmin())] = "#13A89E"
+    cols[int(vals.argmax())] = "#E5484D"
+    labels = [str(i).replace("_", " ") for i in series.index]
+    fig, ax = plt.subplots(figsize=(4.5, 2.6))
+    if horizontal:
+        bars = ax.barh(labels, vals, color=cols, height=0.6)
+        for b, v in zip(bars, vals):
+            ax.text(v, b.get_y() + b.get_height() / 2, f" ₹{v:,.0f}", va="center", fontsize=7)
+        ax.set_xticks([])
+        ax.set_xlim(0, vals.max() * 1.22)
+    else:
+        bars = ax.bar(labels, vals, color=cols, width=0.6)
+        for b, v in zip(bars, vals):
+            ax.text(b.get_x() + b.get_width() / 2, v, f"₹{v:,.0f}", ha="center", va="bottom", fontsize=7)
+        ax.set_yticks([])
+        ax.set_ylim(0, vals.max() * 1.15)
+        plt.setp(ax.get_xticklabels(), rotation=25, ha="right")
+    for s in ax.spines.values():
+        s.set_visible(False)
+    ax.tick_params(length=0, labelsize=7)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.set_title(title, fontsize=9, fontweight="bold", loc="left")
     plt.tight_layout()
     st.pyplot(fig, use_container_width=False)
-
+    plt.close(fig)
 df = get_data()
 cities = sorted(df["source_city"].unique())
 
@@ -42,7 +64,6 @@ sub = df[df["class"] == cls]
 route_df = sub[(sub["source_city"] == src) & (sub["destination_city"] == dst)]
 
 t1, t2, t3, t4, t5 = st.tabs(["🎯 Advisor", "✈️ Flights & Budget", "📉 Savings", "📊 Insights", "💡 Key Findings"])
-
 with t1:
     res = ad.advise(df, src, dst, cls)
     if res is None:
@@ -63,7 +84,6 @@ with t1:
         bar(ad.stops_vs_price(df, src, dst, cls), "Avg price by stops")
         st.subheader("Price trend for this route")
         st.line_chart(route_df.groupby("days_left")["price"].mean())
-
 with t2:
     st.write(f"{src} → {dst} | {travel_date.strftime('%d %b %Y')}")
     day_df = route_df[route_df["days_left"] == days_left]
@@ -87,7 +107,6 @@ with t2:
         else:
             st.dataframe(r, use_container_width=True)
             st.download_button("Download results (CSV)", r.to_csv().encode(), "flights.csv", "text/csv")
-
 with t3:
     s = ad.savings(df, src, dst, days_left, cls)
     if s is None:
@@ -107,7 +126,7 @@ with t4:
     with c2:
         bar(an.booking_window(sub), "Price vs days before flight")
         bar(ad.cheapest_destinations(df, src, cls), f"Cheapest destinations from {src}")
-
+        
 with t5:
     eco = df[df["class"] == "Economy"]
     bus = df[df["class"] == "Business"]
