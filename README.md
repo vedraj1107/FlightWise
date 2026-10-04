@@ -10,5 +10,5 @@ pip install -r requirements.txt
 python main.py
 python -m streamlit run app.py
 ```
-## P+ublic link
+## Public link
 https://flightwise.streamlit.app/
